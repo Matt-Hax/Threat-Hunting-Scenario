@@ -22,7 +22,7 @@ By querying the SignInLogs within the attack time frame, the victim user was ide
 
 Query Used:
 
-<img src="screenshots/flag1_query.png" width="800">
+<img src="screenshots/flag1_query.png" width="1200">
 Result:
 
 ![Flag 1 - Result](screenshots/flag1_result.png)

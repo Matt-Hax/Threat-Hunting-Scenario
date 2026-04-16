@@ -1,159 +1,202 @@
-# Official [Cyber Range](http://joshmadakor.tech/cyber-range) Project
+Threat Hunt Report: Scattered Spider
+Business Email Compromise Investigation
 
-<img width="400" src="https://github.com/user-attachments/assets/44bac428-01bb-4fe9-9d85-96cba7698bee" alt="Tor Logo with the onion and a crosshair on it"/>
+Trigger
+LogN Pacific Financial Services received an urgent call from their bank’s fraud department. A vendor payment of £24,500 was redirected to an unknown account. The receiving bank flagged the transaction as suspicious and froze the funds. The finance team insists they followed standard procedures.
 
-# Threat Hunt Report: Unauthorized TOR Usage
-- [Scenario Creation](https://github.com/joshmadakor0/threat-hunting-scenario-tor/blob/main/threat-hunting-scenario-tor-event-creation.md)
+Initial Report
+Finance employee Mark Smith reported “weird MFA notifications” on the evening of 25 February. He was at home watching TV and kept getting prompted to approve a sign-in. He assumed it was an IT glitch and eventually approved one to make them stop. The next morning, colleagues discovered inbox rules nobody created.
 
-## Platforms and Languages Leveraged
-- Windows 10 Virtual Machines (Microsoft Azure)
-- EDR Platform: Microsoft Defender for Endpoint
-- Kusto Query Language (KQL)
-- Tor Browser
+Objective
+Confirm the compromise. Identify the attacker’s infrastructure. Scope the damage. Determine what inbox rules were created, what emails were sent, and what data was accessed. Identify the threat actor.
 
-##  Scenario
+IR Lead // Opening Brief
+“We have a confirmed fraudulent wire transfer. £24,500 redirected to an unknown account. The bank caught it and froze the funds. Finance say they followed procedure … they got an email from a known colleague with updated banking details and processed it.”
 
-Management suspects that some employees may be using TOR browsers to bypass network security controls because recent network logs show unusual encrypted traffic patterns and connections to known TOR entry nodes. Additionally, there have been anonymous reports of employees discussing ways to access restricted sites during work hours. The goal is to detect any TOR usage and analyze related security incidents to mitigate potential risks. If any use of TOR is found, notify management.
+“That colleague is Mark Smith. Mark reported weird MFA notifications last night. He approved one just to make it stop. This morning his team found inbox rules nobody created. I need you in the sign-in logs now. Confirm the compromise, identify the attacker’s infrastructure, and tell me how they got past MFA. Clock is running.”
 
-### High-Level TOR-Related IoC Discovery Plan
+Flags
 
-- **Check `DeviceFileEvents`** for any `tor(.exe)` or `firefox(.exe)` file events.
-- **Check `DeviceProcessEvents`** for any signs of installation or usage.
-- **Check `DeviceNetworkEvents`** for any signs of outgoing connections over known TOR ports.
+Flag 1 – Compromised Account
+Objective: Before you can investigate, confirm the compromised identity.
 
----
+By querying the SignInLogs within the attack time frame, the victim user was identified as Mark Smith.
 
-## Steps Taken
+Query Used –
+[ Paste KQL query screenshot here ]
 
-### 1. Searched the `DeviceFileEvents` Table
+Result
+[ Paste result screenshot here ]
 
-Searched for any file that had the string "tor" in it and discovered what looks like the user "employee" downloaded a TOR installer, did something that resulted in many TOR-related files being copied to the desktop, and the creation of a file called `tor-shopping-list.txt` on the desktop at `2024-11-08T22:27:19.7259964Z`. These events began at `2024-11-08T22:14:48.6065231Z`.
+Flag 2 – Attacker Source IP
+Objective: Locate the attacker’s source IP.
 
-**Query used to locate events:**
+To find Mark’s legitimate IP, sign-in data prior to the attack window was queried and compared against the IP address recorded at the start of the attack.
 
-```kql
-DeviceFileEvents  
-| where DeviceName == "threat-hunt-lab"  
-| where InitiatingProcessAccountName == "employee"  
-| where FileName contains "tor"  
-| where Timestamp >= datetime(2024-11-08T22:14:48.6065231Z)  
-| order by Timestamp desc  
-| project Timestamp, DeviceName, ActionType, FileName, FolderPath, SHA256, Account = InitiatingProcessAccountName
-```
-<img width="1212" alt="image" src="https://github.com/user-attachments/assets/71402e84-8767-44f8-908c-1805be31122d">
+Query Used –
+[ Paste KQL query screenshot here ]
 
----
+Result
+[ Paste result screenshot here ]
 
-### 2. Searched the `DeviceProcessEvents` Table
+Flag 3 – Attack Origin Country
+Objective: Locate the attacker’s origin country using the IP address.
 
-Searched for any `ProcessCommandLine` that contained the string "tor-browser-windows-x86_64-portable-14.0.1.exe". Based on the logs returned, at `2024-11-08T22:16:47.4484567Z`, an employee on the "threat-hunt-lab" device ran the file `tor-browser-windows-x86_64-portable-14.0.1.exe` from their Downloads folder, using a command that triggered a silent installation.
+iplookup.org was used to retrieve geolocation data for the attacker’s IP address, confirming the origin as the Netherlands.
 
-**Query used to locate event:**
+Result
+[ Paste IP lookup screenshot here ]
 
-```kql
+Flag 4 – MFA Denial Error Code
+Objective: What error code shows that MFA was required but not completed?
 
-DeviceProcessEvents  
-| where DeviceName == "threat-hunt-lab"  
-| where ProcessCommandLine contains "tor-browser-windows-x86_64-portable-14.0.1.exe"  
-| project Timestamp, DeviceName, AccountName, ActionType, FileName, FolderPath, SHA256, ProcessCommandLine
-```
-<img width="1212" alt="image" src="https://github.com/user-attachments/assets/b07ac4b4-9cb3-4834-8fac-9f5f29709d78">
+SignInLogs were queried within the attack window and filtered for failed authentication attempts. The result returned the error code indicating MFA was required but not completed.
 
----
+Query Used –
+[ Paste KQL query screenshot here ]
 
-### 3. Searched the `DeviceProcessEvents` Table for TOR Browser Execution
+Result
+[ Paste result screenshot here ]
 
-Searched for any indication that user "employee" actually opened the TOR browser. There was evidence that they did open it at `2024-11-08T22:17:21.6357935Z`. There were several other instances of `firefox.exe` (TOR) as well as `tor.exe` spawned afterwards.
+Flag 5 – MFA Fatigue Intensity
+Objective: How many MFA push requests came through before Mark accepted one?
 
-**Query used to locate events:**
+SignInLogs were filtered within the attack window and ResultSignatures sorted by time. This confirmed that Mark received 3 MFA push requests before accepting one, consistent with an MFA fatigue (push bombing) attack.
 
-```kql
-DeviceProcessEvents  
-| where DeviceName == "threat-hunt-lab"  
-| where FileName has_any ("tor.exe", "firefox.exe", "tor-browser.exe")  
-| project Timestamp, DeviceName, AccountName, ActionType, FileName, FolderPath, SHA256, ProcessCommandLine  
-| order by Timestamp desc
-```
-<img width="1212" alt="image" src="https://github.com/user-attachments/assets/b13707ae-8c2d-4081-a381-2b521d3a0d8f">
+Query Used –
+[ Paste KQL query screenshot here ]
 
----
+Result
+[ Paste result screenshot here ]
 
-### 4. Searched the `DeviceNetworkEvents` Table for TOR Network Connections
+Flag 6 – Application Accessed
+Objective: After initial access, the attacker accessed a specific application – which one?
 
-Searched for any indication the TOR browser was used to establish a connection using any of the known TOR ports. At `2024-11-08T22:18:01.1246358Z`, an employee on the "threat-hunt-lab" device successfully established a connection to the remote IP address `176.198.159.33` on port `9001`. The connection was initiated by the process `tor.exe`, located in the folder `c:\users\employee\desktop\tor browser\browser\torbrowser\tor\tor.exe`. There were a couple of other connections to sites over port `443`.
+SignInLogs were sorted from the exact time of the attacker’s successful authentication. The attacker first accessed Outlook on the Web.
 
-**Query used to locate events:**
+Query Used –
+[ Paste KQL query screenshot here ]
 
-```kql
-DeviceNetworkEvents  
-| where DeviceName == "threat-hunt-lab"  
-| where InitiatingProcessAccountName != "system"  
-| where InitiatingProcessFileName in ("tor.exe", "firefox.exe")  
-| where RemotePort in ("9001", "9030", "9040", "9050", "9051", "9150", "80", "443")  
-| project Timestamp, DeviceName, InitiatingProcessAccountName, ActionType, RemoteIP, RemotePort, RemoteUrl, InitiatingProcessFileName, InitiatingProcessFolderPath  
-| order by Timestamp desc
-```
-<img width="1212" alt="image" src="https://github.com/user-attachments/assets/87a02b5b-7d12-4f53-9255-f5e750d0e3cb">
+Result
+[ Paste result screenshot here ]
 
----
+Flag 7 & 8 – Attacker OS and Browser
+Objective: Find the attacker’s OS and browser.
 
-## Chronological Event Timeline 
+The DeviceDetail field within SignInLogs was examined, revealing the attacker’s operating system and browser information.
 
-### 1. File Download - TOR Installer
+Query Used –
+[ Paste KQL query screenshot here ]
 
-- **Timestamp:** `2024-11-08T22:14:48.6065231Z`
-- **Event:** The user "employee" downloaded a file named `tor-browser-windows-x86_64-portable-14.0.1.exe` to the Downloads folder.
-- **Action:** File download detected.
-- **File Path:** `C:\Users\employee\Downloads\tor-browser-windows-x86_64-portable-14.0.1.exe`
+Result
+[ Paste result screenshot here ]
 
-### 2. Process Execution - TOR Browser Installation
+Flag 9 & 10 – First Post-Auth Action and Rule Creation
+Objective: What was the first thing the attacker did after successfully accessing the account?
 
-- **Timestamp:** `2024-11-08T22:16:47.4484567Z`
-- **Event:** The user "employee" executed the file `tor-browser-windows-x86_64-portable-14.0.1.exe` in silent mode, initiating a background installation of the TOR Browser.
-- **Action:** Process creation detected.
-- **Command:** `tor-browser-windows-x86_64-portable-14.0.1.exe /S`
-- **File Path:** `C:\Users\employee\Downloads\tor-browser-windows-x86_64-portable-14.0.1.exe`
+The CloudAppEvents table provides telemetry for Office 365 and other cloud services. Querying this table revealed that the attacker first accessed Mark’s mail items in Microsoft Exchange. Evidence of inbox rule creation was also identified.
 
-### 3. Process Execution - TOR Browser Launch
+Query Used –
+[ Paste KQL query screenshot here ]
 
-- **Timestamp:** `2024-11-08T22:17:21.6357935Z`
-- **Event:** User "employee" opened the TOR browser. Subsequent processes associated with TOR browser, such as `firefox.exe` and `tor.exe`, were also created, indicating that the browser launched successfully.
-- **Action:** Process creation of TOR browser-related executables detected.
-- **File Path:** `C:\Users\employee\Desktop\Tor Browser\Browser\TorBrowser\Tor\tor.exe`
+Result
+[ Paste result screenshot here ]
 
-### 4. Network Connection - TOR Network
+Flag 11–14 – Forward Rule Name and Details
+Objective: Find the name of the rule created by the attacker and its details.
 
-- **Timestamp:** `2024-11-08T22:18:01.1246358Z`
-- **Event:** A network connection to IP `176.198.159.33` on port `9001` by user "employee" was established using `tor.exe`, confirming TOR browser network activity.
-- **Action:** Connection success.
-- **Process:** `tor.exe`
-- **File Path:** `c:\users\employee\desktop\tor browser\browser\torbrowser\tor\tor.exe`
+Parsing the RawEventData field in CloudAppEvents revealed how the attacker attempted to conceal their activity. The name field was left blank. The rule forwards any emails containing specific financial keywords to an external address: insights@duck.com. StopProcessingRules was set to True to prevent further rule evaluation and reduce detection.
 
-### 5. Additional Network Connections - TOR Browser Activity
+Query Used –
+[ Paste KQL query screenshot here ]
 
-- **Timestamps:**
-  - `2024-11-08T22:18:08Z` - Connected to `194.164.169.85` on port `443`.
-  - `2024-11-08T22:18:16Z` - Local connection to `127.0.0.1` on port `9150`.
-- **Event:** Additional TOR network connections were established, indicating ongoing activity by user "employee" through the TOR browser.
-- **Action:** Multiple successful connections detected.
+Result
+[ Paste result screenshot here ]
 
-### 6. File Creation - TOR Shopping List
+Flag 15 & 16 – Delete Rule Name and Keywords
+Objective: Was a rule created to delete messages and conceal the attack?
 
-- **Timestamp:** `2024-11-08T22:27:19.7259964Z`
-- **Event:** The user "employee" created a file named `tor-shopping-list.txt` on the desktop, potentially indicating a list or notes related to their TOR browser activities.
-- **Action:** File creation detected.
-- **File Path:** `C:\Users\employee\Desktop\tor-shopping-list.txt`
+A second rule named “..” was identified. This rule automatically deleted inbound messages containing keywords associated with security alerts and suspicious activity notifications.
 
----
+Query Used –
+[ Paste KQL query screenshot here ]
 
-## Summary
+Result
+[ Paste result screenshot here ]
 
-The user "employee" on the "threat-hunt-lab" device initiated and completed the installation of the TOR browser. They proceeded to launch the browser, establish connections within the TOR network, and created various files related to TOR on their desktop, including a file named `tor-shopping-list.txt`. This sequence of activities indicates that the user actively installed, configured, and used the TOR browser, likely for anonymous browsing purposes, with possible documentation in the form of the "shopping list" file.
+Flag 17–20 – BEC Attack
+Objective: Search EmailEvents to find who received the fraudulent email.
 
----
+Querying EmailEvents using Mark Smith’s display name returned the full attack chain. The recipient of the fraudulent email was j.reynolds@lognpacific.org. The attacker used thread hijacking to increase the email’s apparent legitimacy. The subject line was: RE: Invoice #INV-2026-0892 - Updated Banking Details.
 
-## Response Taken
+Query Used –
+[ Paste KQL query screenshot here ]
 
-TOR usage was confirmed on the endpoint `threat-hunt-lab` by the user `employee`. The device was isolated, and the user's direct manager was notified.
+Result
+[ Paste result screenshot here ]
 
----
+Flag 21 – Cloud App Accessed
+Objective: What else did the attacker access, if anything?
+
+CloudAppEvents confirmed the attacker also accessed Mark Smith’s Microsoft OneDrive during the same session.
+
+Query Used –
+[ Paste KQL query screenshot here ]
+
+Result
+[ Paste result screenshot here ]
+
+Flag 22 – SharePoint App Accessed
+Objective: What was the other cloud app the attacker accessed?
+
+Further querying of CloudAppEvents identified Microsoft SharePoint as an additional cloud application accessed by the attacker.
+
+Query Used –
+[ Paste KQL query screenshot here ]
+
+Result
+[ Paste result screenshot here ]
+
+Flag 23 – Session Correlation
+Objective: Check the CloudAppEvents inbox rule events. In RawEventData, find AppAccessContext.AADSessionId. Then confirm it matches the SessionId in SigninLogs for the attacker’s successful authentication.
+
+The AADSessionId value extracted from RawEventData in CloudAppEvents was matched against the SessionId field in SignInLogs, confirming a single continuous attacker session from authentication through to post-compromise activity.
+
+Query Used –
+[ Paste KQL query screenshot here ]
+
+Result
+[ Paste result screenshot here ]
+
+Flag 24 – Conditional Access Status
+Objective: Conditional Access policies can block sign-ins from unmanaged devices or risky locations. Check the attacker’s successful sign-in. What was the ConditionalAccessStatus?
+
+Filtering SignInLogs from the start of the attack and reviewing the ConditionalAccessStatus field confirmed that no Conditional Access policy was applied to the attacker’s sign-in.
+
+Query Used –
+[ Paste KQL query screenshot here ]
+
+Result
+[ Paste result screenshot here ]
+
+Flags 25 & 26 – MITRE Mapping
+Objective: Map the attack methods to the MITRE ATT&CK framework.
+
+MFA fatigue maps to T1621 because attackers spam MFA prompts to pressure users into approving access. Email rule creation maps to T1114.003 when used to forward and exfiltrate emails, or T1564.008 when used to hide alerts and conceal malicious activity. The mapping depends on whether the goal of the rule is data collection or evasion.
+
+Flag 27 – Credential Source
+Objective: The threat group behind this attack is known for purchasing credentials from a specific source. What type of malware typically provides initial credentials to groups like this?
+
+The type of malware that typically provides these stolen credentials is infostealer malware. Infostealers are designed to harvest saved passwords, browser cookies, session tokens, autofill data, and other sensitive information from infected systems. Threat actors then sell this data on underground markets for use in follow-on attacks. Common examples include families such as RedLine, Raccoon, and Lumma.
+
+Flag 28 – Immediate Containment
+Objective: What is the first remediation action?
+
+The first action is to disable Mark Smith’s account and force a password reset.
+
+Flag 29 – Threat Actor Attribution
+Objective: Throughout this investigation you observed MFA fatigue, inbox rule persistence, BEC targeting finance, and use of anonymising infrastructure. The briefing mentioned a group that targeted MGM Resorts and Caesars Entertainment. Who did this?
+
+Scattered Spider.
+
+Cyber Range // Hunt 02 — SCATTERED INVOICE  //  IR-2026-0225-BEC

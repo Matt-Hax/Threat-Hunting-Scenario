@@ -25,7 +25,7 @@ Query Used:
 <img src="screenshots/flag1_query.png" width="1200">
 Result:
 
-![Flag 1 - Result](screenshots/flag1_result.png)
+<img src="screenshots/flag1_result.png" width="1200">
 ---
 Flag 2 – Attacker Source IP
 Objective: Locate the attacker's source IP.

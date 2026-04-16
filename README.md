@@ -21,9 +21,11 @@ Objective: Before you can investigate, confirm the compromised identity.
 By querying the SignInLogs within the attack time frame, the victim user was identified as Mark Smith.
 
 Query Used:
+
 ![Flag 1 - Query](screenshots/flag1_query.png)
 
 Result:
+
 ![Flag 1 - Result](screenshots/flag1_result.png)
 ---
 Flag 2 – Attacker Source IP

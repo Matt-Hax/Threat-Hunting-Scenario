@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IR-2026-0225-BEC | Threat Hunt Report: Scattered Spider</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:         #0a0c0f;
+      --surface:    #0f1318;
+      --border:     #1e2530;
+      --accent-green: #00e676;
+      --accent-red:   #ff4d4d;
+      --accent-amber: #ffb300;
+      --accent-blue:  #40c4ff;
+      --text:       #c8d6e5;
+      --text-dim:   #5a6e84;
+      --text-bright:#eef4fb;
+      --mono:       'JetBrains Mono', monospace;
+      --sans:       'Syne', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    /* ── Layout ── */
+    .wrapper {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+
+    /* ── Header ── */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 48px 0 36px;
+      margin-bottom: 40px;
+    }
+
+    .incident-id {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      color: var(--accent-green);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    h1.report-title {
+      font-family: var(--sans);
+      font-size: clamp(26px, 5vw, 40px);
+      font-weight: 800;
+      color: var(--text-bright);
+      line-height: 1.15;
+      margin-bottom: 10px;
+    }
+
+    .report-subtitle {
+      color: var(--text-dim);
+      font-size: 12px;
+      letter-spacing: 0.05em;
+    }
+
+    .report-subtitle span { color: var(--text); }
+
+    /* ── Sections ── */
+    section { margin-bottom: 48px; }
+
+    h2.section-heading {
+      font-family: var(--sans);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--accent-green);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h2.section-heading::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    h3.sub-heading {
+      font-family: var(--sans);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-bright);
+      margin: 28px 0 8px;
+    }
+
+    h4.flag-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent-red);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 4px;
+    }
+
+    p { color: var(--text); margin-bottom: 12px; }
+    p strong { color: var(--text-bright); font-weight: 600; }
+
+    /* ── Info Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+
+    .card p:last-child { margin-bottom: 0; }
+
+    /* ── Brief card (IR lead quote) ── */
+    .brief-card {
+      background: var(--surface);
+      border-left: 3px solid var(--accent-amber);
+      border-radius: 0 6px 6px 0;
+      padding: 16px 20px;
+      font-style: italic;
+      color: var(--text);
+      margin-bottom: 16px;
+      line-height: 1.75;
+    }
+
+    /* ── Tables ── */
+    .table-wrap { overflow-x: auto; margin-bottom: 16px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    thead tr {
+      background: #111820;
+      border-bottom: 2px solid var(--border);
+    }
+
+    thead th {
+      text-align: left;
+      padding: 10px 14px;
+      font-family: var(--sans);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+
+    tbody tr:hover { background: #111820; }
+
+    tbody td {
+      padding: 10px 14px;
+      vertical-align: top;
+      color: var(--text);
+    }
+
+    tbody td:first-child { color: var(--text-bright); }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+
+    .badge-red    { background: rgba(255,77,77,.12); color: var(--accent-red); border: 1px solid rgba(255,77,77,.3); }
+    .badge-amber  { background: rgba(255,179,0,.1);  color: var(--accent-amber); border: 1px solid rgba(255,179,0,.3); }
+    .badge-blue   { background: rgba(64,196,255,.1); color: var(--accent-blue); border: 1px solid rgba(64,196,255,.3); }
+    .badge-green  { background: rgba(0,230,118,.1);  color: var(--accent-green); border: 1px solid rgba(0,230,118,.3); }
+
+    /* ── Code blocks ── */
+    pre {
+      background: #070a0d;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent-blue);
+      border-radius: 0 4px 4px 0;
+      padding: 16px 18px;
+      overflow-x: auto;
+      font-size: 12.5px;
+      line-height: 1.65;
+      color: #8ecfff;
+      margin-bottom: 12px;
+    }
+
+    pre .kw  { color: #b388ff; }
+    pre .str { color: #80cbc4; }
+    pre .fn  { color: #40c4ff; }
+    pre .cmt { color: #455a64; }
+
+    .result-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin: 12px 0 4px;
+    }
+
+    .result-value {
+      display: inline-block;
+      background: rgba(0,230,118,.08);
+      border: 1px solid rgba(0,230,118,.25);
+      color: var(--accent-green);
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    /* ── Flag blocks ── */
+    .flag-block {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+
+    .flag-header {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      background: #0d1117;
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .flag-num {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: var(--text-dim);
+    }
+
+    .flag-name {
+      font-family: var(--sans);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent-red);
+    }
+
+    .flag-objective {
+      font-size: 12px;
+      font-style: italic;
+      color: var(--text-dim);
+      padding: 8px 18px 0;
+    }
+
+    .flag-body { padding: 12px 18px 16px; }
+    .flag-body p:last-child { margin-bottom: 0; }
+
+    /* ── Summary box ── */
+    .summary-box {
+      border: 1px solid rgba(0,230,118,.2);
+      background: rgba(0,230,118,.04);
+      border-radius: 6px;
+      padding: 24px 28px;
+    }
+
+    .summary-box h3 {
+      font-family: var(--sans);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent-green);
+      margin-bottom: 14px;
+    }
+
+    .summary-box p { margin-bottom: 14px; }
+    .summary-box p:last-child { margin-bottom: 0; }
+
+    /* ── Lessons / Recommendations ── */
+    .lesson {
+      border-left: 3px solid var(--accent-red);
+      padding: 10px 16px;
+      margin-bottom: 16px;
+      background: rgba(255,77,77,.04);
+      border-radius: 0 4px 4px 0;
+    }
+
+    .lesson strong { color: var(--accent-red); display: block; margin-bottom: 4px; font-size: 13px; }
+
+    ul.rec-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    ul.rec-list li {
+      padding: 8px 0 8px 20px;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+      color: var(--text);
+    }
+
+    ul.rec-list li::before {
+      content: '›';
+      position: absolute;
+      left: 0;
+      color: var(--accent-green);
+      font-weight: 700;
+    }
+
+    ul.rec-list li:last-child { border-bottom: none; }
+
+    /* ── IOC table highlight ── */
+    .ioc-type { color: var(--accent-amber); font-weight: 600; font-size: 11px; letter-spacing: 0.08em; }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding-top: 24px;
+      font-size: 11px;
+      color: var(--text-dim);
+      text-align: center;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- ══ HEADER ══ -->
+  <header>
+    <div class="incident-id">Incident Report // IR-2026-0225-BEC</div>
+    <h1 class="report-title">Threat Hunt Report:<br>Scattered Spider</h1>
+    <p class="report-subtitle">
+      Business Email Compromise Investigation &nbsp;|&nbsp;
+      Analyst: <span>Matt McClintock</span> &nbsp;|&nbsp;
+      <span>4/15/26</span>
+    </p>
+  </header>
+
+  <!-- ══ TRIGGER ══ -->
+  <section>
+    <h2 class="section-heading">Trigger</h2>
+    <div class="card">
+      <p>LogN Pacific Financial Services received an urgent call from their bank's fraud department. A vendor payment of <strong>£24,500</strong> was redirected to an unknown account. The receiving bank flagged the transaction as suspicious and froze the funds. The finance team insists they followed standard procedures.</p>
+    </div>
+    <div class="card">
+      <p><strong>Initial Report:</strong> Finance employee Mark Smith reported "weird MFA notifications" on the evening of 25 February. He was at home watching TV and kept getting prompted to approve a sign-in. He assumed it was an IT glitch and eventually approved one to make them stop. The next morning, colleagues discovered inbox rules nobody created.</p>
+    </div>
+    <div class="card">
+      <p><strong>Objective:</strong> Confirm the compromise. Identify the attacker's infrastructure. Scope the damage. Determine what inbox rules were created, what emails were sent, and what data was accessed. Identify the threat actor.</p>
+    </div>
+  </section>
+
+  <!-- ══ IR LEAD BRIEF ══ -->
+  <section>
+    <h2 class="section-heading">IR Lead // Opening Brief</h2>
+    <div class="brief-card">
+      "We have a confirmed fraudulent wire transfer. £24,500 redirected to an unknown account. The bank caught it and froze the funds. Finance say they followed procedure … they got an email from a known colleague with updated banking details and processed it."
+      <br><br>
+      "That colleague is Mark Smith. Mark reported weird MFA notifications last night. He approved one just to make it stop. This morning his team found inbox rules nobody created. I need you in the sign-in logs now."
+    </div>
+  </section>
+
+  <!-- ══ SCOPE OF IMPACT ══ -->
+  <section>
+    <h2 class="section-heading">Scope of Impact</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Asset</th>
+            <th>Impact</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Mark Smith — M365 Account</td>
+            <td>Full account takeover via MFA fatigue</td>
+            <td><span class="badge badge-red">Compromised</span></td>
+          </tr>
+          <tr>
+            <td>Exchange Mailbox</td>
+            <td>Inbox rules created; emails forwarded externally</td>
+            <td><span class="badge badge-red">Compromised</span></td>
+          </tr>
+          <tr>
+            <td>Microsoft OneDrive</td>
+            <td>Accessed during attacker session — data exposure possible</td>
+            <td><span class="badge badge-amber">Under Review</span></td>
+          </tr>
+          <tr>
+            <td>Microsoft SharePoint</td>
+            <td>Accessed during attacker session — data exposure possible</td>
+            <td><span class="badge badge-amber">Under Review</span></td>
+          </tr>
+          <tr>
+            <td>Financial Transfer — £24,500</td>
+            <td>Redirected to fraudulent account</td>
+            <td><span class="badge badge-blue">Frozen by Bank</span></td>
+          </tr>
+          <tr>
+            <td>J. Reynolds — Finance</td>
+            <td>Recipient of fraudulent BEC email; actioned payment</td>
+            <td><span class="badge badge-green">No Compromise</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══ IOCs ══ -->
+  <section>
+    <h2 class="section-heading">Indicators of Compromise (IOCs)</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Value</th>
+            <th>Context</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="ioc-type">IP</span></td>
+            <td>205.147.16.190</td>
+            <td>Attacker authentication source — Netherlands</td>
+          </tr>
+          <tr>
+            <td><span class="ioc-type">EMAIL</span></td>
+            <td>insights@duck.com</td>
+            <td>External address used in forwarding inbox rule</td>
+          </tr>
+          <tr>
+            <td><span class="ioc-type">EMAIL SUBJECT</span></td>
+            <td>RE: Invoice #INV-2026-0892 - Updated Banking Details</td>
+            <td>Thread-hijacked BEC email subject line</td>
+          </tr>
+          <tr>
+            <td><span class="ioc-type">INBOX RULE</span></td>
+            <td>[blank name]</td>
+            <td>Forwards financial keyword emails to insights@duck.com; StopProcessingRules: True</td>
+          </tr>
+          <tr>
+            <td><span class="ioc-type">INBOX RULE</span></td>
+            <td>..</td>
+            <td>Deletes inbound security alert and suspicious activity notifications</td>
+          </tr>
+          <tr>
+            <td><span class="ioc-type">ACCOUNT</span></td>
+            <td>mark.smith@lognpacific.org</td>
+            <td>Compromised M365 account — source of BEC email</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══ FLAGS ══ -->
+  <section>
+    <h2 class="section-heading">Flags</h2>
+
+    <!-- FLAG 01 -->
+    <div class="flag-block">
+      <div class="flag-header">
+        <span class="flag-num">FLAG 01</span>
+        <span class="flag-name">Compromised Account</span>
+      </div>
+      <p class="flag-objective">Objective: Before you can investigate, confirm the compromised identity.</p>
+      <div class="flag-body">
+        <p>By querying the SignInLogs within the attack time frame, the victim user was identified as <strong>Mark Smith</strong>.</p>
+        <p class="result-label">Query Used</p>
+        <pre><span class="fn">SigninLogs</span>
+<span class="kw">| where</span> TimeGenerated <span class="kw">between</span> (todatetime(<span class="str">'2026-02-25T21:00:00Z'</span>) .. todatetime(<span class="str">'2026-02-25T23:00:00Z'</span>))
+<span class="kw">| where</span> UserDisplayName <span class="kw">contains</span> <span class="str">"Mark"</span>
+<span class="kw">| project</span> UserPrincipalName</pre>
+        <div class="result-label">Result</div>
+        <div class="result-value">mark.smith@lognpacific.org</div>
+      </div>
+    </div>
+
+    <!-- FLAG 02 -->
+    <div class="flag-block">
+      <div class="flag-header">
+        <span class="flag-num">FLAG 02</span>
+        <span class="flag-name">Attacker Source IP</span>
+      </div>
+      <p class="flag-objective">Objective: Locate the attacker's source IP.</p>
+      <div class="flag-body">
+        <p>To find Mark's legitimate IP, sign-in data prior to the attack window was queried and compared against the IP address recorded at the start of the attack.</p>
+        <p class="result-label">Query Used</p>
+        <pre><span class="fn">SigninLogs</span>
+<span class="kw">| where</span> TimeGenerated <span class="kw">&gt;</span> todatetime(<span class="str">'2026-02-24T21:00:00Z'</span>)
+<span class="kw">| where</span> UserDisplayName <span class="kw">contains</span> <span class="str">"Mark"</span>
+<span class="kw">| where</span> isnotempty(AlternateSignInName)
+<span class="kw">| summarize</span> Count = count() <span class="kw">by</span> IPAddress, ResultSignature, AlternateSignInName
+<span class="kw">| order by</span> Count <span class="kw">desc</span></pre>
+        <div class="result-label">Result</div>
+        <div class="result-value">205.147.16.190</div>
+      </div>
+    </div>
+
+    <!-- FLAG 03 -->
+    <div class="flag-block">
+      <div class="flag-header">
+        <span class="flag-num">FLAG 03</span>
+        <span class="flag-name">Attack Origin Country</span>
+      </div>
+      <p class="flag-objective">Objective: Locate the attacker's origin country using the IP address.</p>
+      <div class="flag-body">
+        <p>iplookup.org was used to retrieve geolocation data for the attacker's IP address, confirming the origin as the <strong>Netherlands</strong>.</p>
+        <div class="result-label">Result</div>
+        <div class="result-value">Netherlands</div>
+      </div>
+    </div>
+
+    <!-- FLAG 04 -->
+    <div class="flag-block">
+      <div class="flag-header">
+        <span class="flag-num">FLAG 04</span>
+        <span class="flag-name">MFA Denial Error Code</span>
+      </div>
+      <p class="flag-objective">Objective: What error code shows that MFA was required but not completed?</p>
+      <div class="flag-body">
+        <p>SignInLogs were queried within the attack window and filtered for failed authentication attempts. The result returned the error code indicating MFA was required but not completed.</p>
+        <p class="result-label">Query Used</p>
+        <pre><span class="fn">SigninLogs</span>
+<span class="kw">| where</span> TimeGenerated <span class="kw">between</span> (todatetime(<span class="str">'2026-02-25T21:00:00Z'</span>) .. todatetime(<span class="str">'2026-02-25T23:00:00Z'</span>))
+<span class="kw">| where</span> UserDisplayName <span class="kw">contains</span> <span class="str">"Mark"</span>
+<span class="kw">| where</span> ResultType != 0
+<span class="kw">| project</span> TimeGenerated, UserDisplayName, IPAddress, ResultType, ResultDescription
+<span class="kw">| sort by</span> TimeGenerated <span class="kw">desc</span></pre>
+        <div class="result-label">Result</div>
+        <div class="result-value">50074</div>
+      </div>
+    </div>
+
+    <!-- FLAG 05 -->
+    <div class="flag-block">
+      <div class="flag-header">
+        <span class="flag-num">FLAG 05</span>
+        <span class="flag-name">MFA Fatigue Intensity</span>
+      </div>
+      <p class="flag-objective">Objective: How many MFA push requests came through before Mark accepted one?</p>
+      <div class="flag-body">
+        <p>SignInLogs were filtered within the attack window and ResultSignatures sorted by time. This confirmed that Mark received <strong>3 MFA push requests</strong> before accepting one, consistent with an MFA fatigue (push bombing) attack.</p>
+        <p class="result-label">Query Used</p>
+        <pre><span class="fn">SigninLogs</span>
+<span class="kw">| where</span> TimeGenerated <span class="kw">between</span> (todatetime(<span class="str">'2026-02-25T21:00:00Z'</span>) .. todatetime(<span class="str">'2026-02-26T23:00:00Z'</span>))
+<span class="kw">| where</span> IPAddress == <span class="str">"205.147.16.190"</span>
+<span class="kw">| sort by</span> TimeGenerated <span class="kw">asc</span>
+<span class="kw">| project</span> TimeGenerated, ResultType, ResultSignature, ResultDescription, IPAddress</pre>
+        <div class="result-label">Result</div>
+        <div class="result-value">3</div>
+      </div>
+    </div>
+
+    <!-- FLAG 06 -->
+    <div class="flag-block">
+      <div class="flag-header">
+        <span class="flag-num">FLAG 06</span>
+        <span class="flag-name">Application Accessed</span>
+      </div>
+      <p class="flag-objective">Objective: After initial access, the attacker accessed a specific application – which one?</p>
+      <div class="flag-body">
+        <p>SignInLogs were sorted from the exact time of the attacker's successful authentication. The attacker first accessed <strong>Outlook on the Web</strong>.</p>
+        <p class="result-label">Query Used</p>
+        <pre><span class="fn">SigninLogs</span>
+<span class="kw">| where</span> TimeGenerated <span class="kw">between</span> (todatetime(<span class="str">'2026-02-25T21:59:52.7988431Z'</span>) .. todatetime(<span class="str">'2026-02-26T23:00:00Z'</span>))
+<span class="kw">| where</span> IPAddress == <span class="str">"205.147.16.190"</span>
+<span class="kw">| sort by</span> TimeGenerated <span class="kw">asc</span>
+<span class="kw">| project</span> TimeGenerated, UserDisplayName, IPAddress, AppDisplayName</pre>
+        <div class="result-label">Result</div>
+        <div class="result-value">Outlook on the Web</div>
+      </div>
+    </div>
+
+    <!-- FLAG 07 & 08 -->
+    <div class="flag-block">
+      <div class="flag-header">
+        <span class="flag-num">FLAG 07 &amp; 08</span>
+        <span class="flag-name">Attacker OS and Browser</span>
+      </div>
+      <p class="flag-objective">Objective: Find the attacker's OS and browser.</p>
+      <div class="flag-body">
+        <p>The DeviceDetail field within SignInLogs was examined, revealing the attacker's operating system and browser information.</p>
+        <p class="result-label">Query Used</p>
+        <pre><span class="fn">SigninLogs</span>
+<span class="kw">| where</span> TimeGenerated <span class="kw">between</span> (todatetime(<span class="str">'2026-02-25T21:59:52.7988431Z'</span>) .. todatetime(<span class="str">'2026-02-26T23:00:00Z'</span>))
+<span class="kw">| where</span> UserDisplayName <span class="kw">contains</span> <span class="str">"Mark"</span>
+<span class="kw">| project</span> TimeGenerated, DeviceDetail, IPAddress
+<span class="kw">| sort by</span> TimeGenerated <span class="kw">desc</span></pre>
+        <div class="result-label">Result</div>
+        <div class="result-value">Windows 10 &nbsp;|&nbsp; Firefox</div>
+      </div>
+    </div>
+
+    <!-- FLAG 09 & 10 -->
+    <div class="flag-block">
+      <div class="flag-header">
+        <span class="flag-num">FLAG 09 &amp; 10</span>
+        <span class="flag-name">First Post-Auth Action and Rule Creation</span>
+      </div>
+      <p class="flag-objective">Objective: What was the first thing the attacker did after successfully accessing the account?</p>
+      <div class="flag-body">
+        <p>The CloudAppEvents table provides telemetry for Office 365 and other cloud services. Querying this table revealed that the attacker first accessed Mark's mail items in Microsoft Exchange. Evidence of inbox rule creation was also identified.</p>
+        <p class="result-label">Query Used</p>
+        <pre><span class="fn">CloudAppEvents</span>
+<span class="kw">| where</span> TimeGenerated <span class="kw">between</span> (todatetime(<span class="str">'2026-02-25T21:00:00Z'</span>) .. todatetime(<span class="str">'2026-02-26T23:00:00Z'</span>))
+<span class="kw">| where</span> IPAddress == <span class="str">"205.147.16.190"</span>
+<span class="kw">| project</span> TimeGenerated, AccountDisplayName, IPAddress, Application, ActionType
+<span class="kw">| sort by</span> TimeGenerated <span class="kw">asc</span></pre>
+        <div class="result-label">Result</div>
+        <div class="result-value">MailItemsAccessed &nbsp;|&nbsp; New-InboxRule</div>
+      </div>
+    </div>
+
+    <!-- FLAG 11–14 -->
+    <div class="flag-block">
+      <div class="flag-header">
+        <span class="flag-num">FLAG 11 – 14</span>
+        <span class="flag-name">Forward Rule Name and Details</span>
+      </div>
+      <p class="flag-objective">Objective: Find the name of the rule created by the attacker and its details.</p>
+      <div class="flag-body">
+        <p>Parsing the RawEventData field in CloudAppEvents revealed how the attacker attempted to conceal their activity. The name field was left <strong>blank</strong>. The rule forwards any emails containing specific financial keywords to an external address: <strong>insights@duck.com</strong>. StopProcessingRules was set to <strong>True</strong> to prevent further rule evaluation and reduce detection.</p>
+        <p class="result-label">Query Used</p>
+        <pre><span class="fn">CloudAppEvents</span>
+<span class="kw">| where</span> TimeGenerated <span class="kw">between</span> (todatetime(<span class="str">'2026-02-25T21:00:00Z'</span>) .. todatetime(<span class="str">'2026-02-25T23:00:00Z'</span>))
+<span class="kw">| where</span> IPAddress == <span class="str">"205.147.16.190"</span>
+<span class="kw">| where</span> isnotempty(tostring(RawEventData.Parameters))
+<span class="kw">| sort by</span> TimeGenerated <span class="kw">asc</span>
+<span class="kw">| project</span> TimeGenerated, ActionType, Application, IPAddress, tostring(RawEventData.Parameters)</pre>
+        <div class="result-label">Result</div>
+        <div class="result-value">Name: [blank] &nbsp;|&nbsp; ForwardTo: insights@duck.com &nbsp;|&nbsp; StopProcessingRules: True</div>
+      </div>
+    </div>
+
+    <!-- FLAG 15 & 16 -->
+    <div class="flag-block">
+      <div class="flag-header">
+        <span class="flag-num">FLAG 15 &amp; 16</span>
+        <span class="flag-name">Delete Rule Name and Keywords</span>
+      </div>
+      <p class="flag-objective">Objective: Was a rule created to delete messages and conceal the attack?</p>
+      <div class="flag-body">
+        <p>A second rule named <strong>'..'</strong> was identified. This rule automatically deleted inbound messages containing keywords associated with security alerts and suspicious activity notifications.</p>
+        <p class="result-label">Query Used</p>
+        <pre><span class="fn">CloudAppEvents</span>
+<span class="kw">| where</span> TimeGenerated <span class="kw">between</span> (todatetime(<span class="str">'2026-02-25T21:00:00Z'</span>) .. todatetime(<span class="str">'2026-02-25T23:00:00Z'</span>))
+<span class="kw">| where</span> IPAddress == <span class="str">"205.147.16.190"</span>
+<span class="kw">| where</span> ActionType <span class="kw">has_any</span> (<span class="str">"Inbox"</span>, <span class="str">"New"</span>, <span class="str">"Rule"</span>)</pre>
+        <div class="result-label">Result</div>
+        <div class="result-value">Name: ".." &nbsp;|&nbsp; DeleteMessage: True &nbsp;|&nbsp; Keywords: security alerts, suspicious activity</div>
+      </div>
+    </div>
+
+    <!-- FLAG 17–20 -->
+    <div class="flag-block">
+      <div class="flag-header">
+        <span class="flag-num">FLAG 17 – 20</span>
+        <span class="flag-name">BEC Attack</span>
+      </div>
+      <p class="flag-objective">Objective: Search EmailEvents to find who received the fraudulent email.</p>
+      <div class="flag-body">
+        <p>Querying EmailEvents using Mark Smith's display name returned the full attack chain. The recipient of the fraudulent email was <strong>j.reynolds@lognpacific.org</strong>. The attacker used thread hijacking to increase the email's apparent legitimacy. The subject line was: <strong>RE: Invoice #INV-2026-0892 - Updated Banking Details</strong>.</p>
+        <p class="result-label">Query Used</p>
+        <pre><span class="fn">EmailEvents</span>
+<span class="kw">| where</span> TimeGenerated <span class="kw">between</span> (todatetime(<span class="str">'2026-02-25T21:00:00Z'</span>) .. todatetime(<span class="str">'2026-02-25T23:00:00Z'</span>))
+<span class="kw">| where</span> SenderDisplayName <span class="kw">contains</span> <span class="str">"Mark"</span></pre>
+        <div class="result-label">Result</div>
+        <div class="result-value">j.reynolds@lognpacific.org</div>
+      </div>
+    </div>
+
+    <!-- FLAG 21 -->
+    <div class="flag-block">
+      <div class="flag-header">
+        <span class="flag-num">FLAG 21</span>
+        <span class="flag-name">Cloud App Accessed</span>
+      </div>
+      <p class="flag-objective">Objective: What else did the attacker access, if anything?</p>
+      <div class="flag-body">
+        <p>CloudAppEvents confirmed the attacker also accessed Mark Smith's <strong>Microsoft OneDrive</strong> during the same session.</p>
+        <p class="result-label">Query Used</p>
+        <pre><span class="fn">CloudAppEvents</span>
+<span class="kw">| where</span> TimeGenerated <span class="kw">between</span> (todatetime(<span class="str">'2026-02-25T21:00:00Z'</span>) .. todatetime(<span class="str">'2026-02-25T23:00:00Z'</span>))
+<span class="kw">| where</span> IPAddress == <span class="str">"205.147.16.190"</span>
+<span class="kw">| where</span> ActionType <span class="kw">contains</span> <span class="str">"access"</span>
+<span class="kw">| project</span> TimeGenerated, ActionType, IPAddress, Application</pre>
+        <div class="result-label">Result</div>
+        <div class="result-value">Microsoft OneDrive</div>
+      </div>
+    </div>
+
+    <!-- FLAG 22 -->
+    <div class="flag-block">
+      <div class="flag-header">
+        <span class="flag-num">FLAG 22</span>
+        <span class="flag-name">SharePoint App Accessed</span>
+      </div>
+      <p class="flag-objective">Objective: What was the other cloud app the attacker accessed?</p>
+      <div class="flag-body">
+        <p>Further querying of CloudAppEvents identified <strong>Microsoft SharePoint</strong> as an additional cloud application accessed by the attacker.</p>
+        <p class="result-label">Query Used</p>
+        <pre><span class="fn">SigninLogs</span>
+<span class="kw">| where</span> TimeGenerated <span class="kw">between</span> (todatetime(<span class="str">'2026-02-25T21:00:00Z'</span>) .. todatetime(<span class="str">'2026-02-25T23:00:00Z'</span>))
+<span class="kw">| where</span> IPAddress == <span class="str">"205.147.16.190"</span>
+<span class="kw">| where</span> ResultType == <span class="str">"0"</span>
+<span class="kw">| project</span> AppDisplayName</pre>
+        <div class="result-label">Result</div>
+        <div class="result-value">Microsoft SharePoint</div>
+      </div>
+    </div>
+
+    <!-- FLAG 23 -->
+    <div class="flag-block">
+      <div class="flag-header">
+        <span class="flag-num">FLAG 23</span>
+        <span class="flag-name">Session Correlation</span>
+      </div>
+      <p class="flag-objective">Objective: Check the CloudAppEvents inbox rule events. In RawEventData, find AppAccessContext.AADSessionId. Confirm it matches the SessionId in SigninLogs for the attacker's successful authentication.</p>
+      <div class="flag-body">
+        <p>The AADSessionId value extracted from RawEventData in CloudAppEvents was matched against the SessionId field in SignInLogs, confirming a <strong>single continuous attacker session</strong> from authentication through to post-compromise activity.</p>
+        <p class="result-label">Query Used</p>
+        <pre><span class="fn">CloudAppEvents</span>
+<span class="kw">| where</span> TimeGenerated <span class="kw">between</span> (todatetime(<span class="str">'2026-02-25T21:00:00Z'</span>) .. todatetime(<span class="str">'2026-02-25T23:00:00Z'</span>))</pre>
+        <div class="result-label">Result</div>
+        <div class="result-value">AADSessionId matches SignInLogs SessionId ✓</div>
+      </div>
+    </div>
+
+    <!-- FLAG 24 -->
+    <div class="flag-block">
+      <div class="flag-header">
+        <span class="flag-num">FLAG 24</span>
+        <span class="flag-name">Conditional Access</span>
+      </div>
+      <p class="flag-objective">Objective: Were any Conditional Access policies triggered?</p>
+      <div class="flag-body">
+        <p>The ConditionalAccessStatus field in SignInLogs returned <strong>notApplied</strong>, confirming that no Conditional Access policies were in place to challenge or block the attacker's authentication from the Netherlands.</p>
+        <div class="result-label">Result</div>
+        <div class="result-value">ConditionalAccessStatus: notApplied</div>
+      </div>
+    </div>
+
+    <!-- FLAG 25 -->
+    <div class="flag-block">
+      <div class="flag-header">
+        <span class="flag-num">FLAG 25</span>
+        <span class="flag-name">Anonymising Infrastructure</span>
+      </div>
+      <p class="flag-objective">Objective: What type of anonymising infrastructure did the attacker use?</p>
+      <div class="flag-body">
+        <p>The attacker routed their connection through a <strong>VPN / hosting provider</strong> (AS7018 / AT&amp;T/Netherlands-hosted infrastructure), consistent with use of a residential proxy or commercial VPN to mask their true origin.</p>
+        <div class="result-label">Result</div>
+        <div class="result-value">VPN / Residential Proxy</div>
+      </div>
+    </div>
+
+    <!-- FLAG 26 -->
+    <div class="flag-block">
+      <div class="flag-header">
+        <span class="flag-num">FLAG 26</span>
+        <span class="flag-name">Delete Rule Keywords</span>
+      </div>
+      <p class="flag-objective">Objective: What keywords were used in the delete rule?</p>
+      <div class="flag-body">
+        <p>The ".." rule was configured to delete inbound messages containing keywords related to <strong>security alerts and suspicious activity notifications</strong>, preventing Mark from receiving any automated warnings about the compromise.</p>
+        <div class="result-label">Result</div>
+        <div class="result-value">security alert, suspicious activity, unusual sign-in</div>
+      </div>
+    </div>
+
+    <!-- FLAG 27 -->
+    <div class="flag-block">
+      <div class="flag-header">
+        <span class="flag-num">FLAG 27</span>
+        <span class="flag-name">Credential Source</span>
+      </div>
+      <p class="flag-objective">Objective: What type of malware typically provides initial credentials to groups like this?</p>
+      <div class="flag-body">
+        <p>The type of malware that typically provides these stolen credentials is <strong>infostealer malware</strong>. Infostealers are designed to harvest saved passwords, browser cookies, session tokens, autofill data, and other sensitive information from infected systems. Threat actors then sell this data on underground markets for use in follow-on attacks. Common examples include families such as RedLine, Raccoon, and Lumma.</p>
+        <div class="result-label">Result</div>
+        <div class="result-value">Infostealer Malware</div>
+      </div>
+    </div>
+
+    <!-- FLAG 28 -->
+    <div class="flag-block">
+      <div class="flag-header">
+        <span class="flag-num">FLAG 28</span>
+        <span class="flag-name">Immediate Containment</span>
+      </div>
+      <p class="flag-objective">Objective: What is the first remediation action?</p>
+      <div class="flag-body">
+        <p>The first action is to <strong>disable Mark Smith's account and force a password reset</strong>.</p>
+        <div class="result-label">Result</div>
+        <div class="result-value">Disable account + Force password reset</div>
+      </div>
+    </div>
+
+    <!-- FLAG 29 -->
+    <div class="flag-block">
+      <div class="flag-header">
+        <span class="flag-num">FLAG 29</span>
+        <span class="flag-name">Threat Actor Attribution</span>
+      </div>
+      <p class="flag-objective">Objective: Throughout this investigation you observed MFA fatigue, inbox rule persistence, BEC targeting finance, and use of anonymising infrastructure. Who did this?</p>
+      <div class="flag-body">
+        <p><strong>Scattered Spider.</strong> The techniques, infrastructure, and targeting profile observed in this incident are consistent with Scattered Spider (also tracked as UNC3944), a financially motivated threat group responsible for high-profile intrusions at MGM Resorts, Caesars Entertainment, and multiple UK retail organisations.</p>
+        <div class="result-label">Result</div>
+        <div class="result-value">Scattered Spider (UNC3944)</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ INVESTIGATION SUMMARY ══ -->
+  <section>
+    <h2 class="section-heading">Investigation Summary</h2>
+    <div class="summary-box">
+      <h3>Summary</h3>
+      <p>On the evening of 25 February 2026, threat actor Scattered Spider compromised the Microsoft 365 account of finance employee Mark Smith at LogN Pacific Financial Services via an MFA fatigue attack — repeatedly pushing authentication requests until Mark approved one to stop the prompts. The attacker's session originated from the Netherlands and bypassed Conditional Access controls entirely.</p>
+      <p>Once inside, the attacker created two malicious inbox rules: one to silently forward financial emails to an external address, and another to automatically delete incoming security alerts. Using Mark's compromised account, they sent a fraudulent email to a finance colleague via thread hijacking, redirecting a vendor payment of £24,500 to a fraudulent account. The receiving bank flagged the transaction and froze the funds. The attacker also accessed Mark's OneDrive and SharePoint during the same session, indicating potential data exposure.</p>
+      <p>Immediate containment required disabling Mark's account and forcing a password reset. Longer-term recommendations include phishing-resistant MFA and Conditional Access enforcement.</p>
+    </div>
+  </section>
+
+  <!-- ══ LESSONS LEARNED ══ -->
+  <section>
+    <h2 class="section-heading">Lessons Learned</h2>
+
+    <div class="lesson">
+      <strong>Control Failure — MFA Push Notifications</strong>
+      Standard MFA push notifications are vulnerable to fatigue attacks. The lack of number-matching or additional context in the push prompt meant Mark had no way to distinguish a legitimate sign-in from an attacker's prompt, making approval under duress likely.
+    </div>
+
+    <div class="lesson">
+      <strong>Control Failure — No Conditional Access Policy</strong>
+      The attacker signed in from an unrecognised IP in the Netherlands with no Conditional Access policy in place to challenge or block the attempt. A policy enforcing compliant device or trusted location requirements would have prevented access entirely.
+    </div>
+
+    <div class="lesson">
+      <strong>Control Failure — No Alerting on Inbox Rule Creation</strong>
+      The attacker created two malicious inbox rules without triggering any alert. Automated detection of inbox rule creation events — particularly those involving external forwarding addresses — would have surfaced the compromise hours earlier.
+    </div>
+
+    <div class="lesson">
+      <strong>Process Gap — Payment Verification</strong>
+      The finance team processed a payment based solely on an email instruction, without a secondary verification step such as a phone call to the requestor. A dual-verification procedure for payment detail changes would have stopped the fraudulent transfer regardless of the email compromise.
+    </div>
+  </section>
+
+  <!-- ══ RECOMMENDATIONS ══ -->
+  <section>
+    <h2 class="section-heading">Recommendations</h2>
+
+    <h3 class="sub-heading">Immediate</h3>
+    <ul class="rec-list">
+      <li>Disable Mark Smith's Microsoft 365 account and revoke all active sessions.</li>
+      <li>Force a password reset upon account restoration.</li>
+      <li>Remove all attacker-created inbox rules from Mark Smith's mailbox.</li>
+      <li>Coordinate with the receiving bank to recover the frozen £24,500 transfer.</li>
+      <li>Conduct a full review of files accessed in OneDrive and SharePoint during the attacker's session.</li>
+    </ul>
+
+    <h3 class="sub-heading">Short-Term</h3>
+    <ul class="rec-list">
+      <li>Enable number-matching and additional context in MFA push notifications to mitigate fatigue attacks.</li>
+      <li>Implement Conditional Access policies requiring compliant or hybrid-joined devices and blocking sign-ins from high-risk geographies.</li>
+      <li>Enable Microsoft Defender for Cloud Apps anomaly detection, specifically for inbox rule creation events involving external forwarding addresses.</li>
+    </ul>
+
+    <h3 class="sub-heading">Long-Term</h3>
+    <ul class="rec-list">
+      <li>Deploy FIDO2 phishing-resistant authentication (hardware security keys) for all finance and privileged accounts.</li>
+      <li>Establish a dual-verification process for any payment detail change requests — email alone should never be sufficient authorisation.</li>
+      <li>Implement DMARC, DKIM, and SPF on all company domains to reduce spoofing risk.</li>
+      <li>Provide targeted security awareness training for finance staff on BEC and thread hijacking indicators.</li>
+      <li>Establish a dedicated out-of-band alert channel for MFA anomalies that bypasses email-based notifications.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <p>IR-2026-0225-BEC &nbsp;·&nbsp; Threat Hunt Report: Scattered Spider &nbsp;·&nbsp; Analyst: Matt McClintock &nbsp;·&nbsp; 4/15/26</p>
+  </footer>
+
+</div>
+</body>
+</html>
